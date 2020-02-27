@@ -22,6 +22,7 @@
    methods/CF.ipynb
    methods/CFProto.ipynb
    methods/TrustScores.ipynb
+   methods/LinearityMeasure.ipynb
 
 .. toctree::
    :maxdepth: 1
