@@ -139,7 +139,7 @@ def _calculate_pairwise_linearity(predict_fn: Callable, x: np.ndarray, input_sha
 
     t_0 = time()
     if model_type == 'classifier':
-        if isinstance(predict_fn, tf.keras.Model) or isinstance(predict_fn, 'keras.Model'):
+        if isinstance(predict_fn, tf.keras.Model):
             outs = predict_fn(X_samples).numpy()
         else:
             outs = np.log(predict_fn(X_samples) + 1e-10)
