@@ -60,7 +60,7 @@ def _calculate_global_linearity(predict_fn: Callable, input_shape: Tuple, X_samp
     t_0 = time()
     if model_type == 'classifier':
         if isinstance(predict_fn, tf.keras.Model):
-            outs = np.log(predict_fn(X_samples).numpy() + 1e-10)
+            outs = predict_fn(X_samples).numpy()
         else:
             outs = np.log(predict_fn(X_samples) + 1e-10)
         outs_shape = outs.shape[1:]
@@ -137,7 +137,7 @@ def _calculate_pairwise_linearity(predict_fn: Callable, x: np.ndarray, input_sha
     t_0 = time()
     if model_type == 'classifier':
         if isinstance(predict_fn, tf.keras.Model) or isinstance(predict_fn, 'keras.Model'):
-            outs = np.log(predict_fn(X_samples).numpy() + 1e-10)
+            outs = predict_fn(X_samples).numpy()
         else:
             outs = np.log(predict_fn(X_samples) + 1e-10)
         outs_shape = outs.shape[1:]
