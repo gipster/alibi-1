@@ -60,7 +60,7 @@ def _calculate_global_linearity(predict_fn: Callable, input_shape: Tuple, X_samp
     t_0 = time()
     if model_type == 'classifier':
         if isinstance(predict_fn, tf.keras.Model):
-            outs = predict_fn(X_samples).numpy()
+            outs = predict_fn(tf.dtypes.cast(X_samples, predict_fn.input.dtype)).numpy()
         else:
             outs = np.log(predict_fn(X_samples) + 1e-10)
         outs_shape = outs.shape[1:]
@@ -87,6 +87,7 @@ def _calculate_global_linearity(predict_fn: Callable, input_shape: Tuple, X_samp
 
     if model_type == 'classifier':
         if isinstance(predict_fn, tf.keras.Model):
+            summ = tf.dtypes.cast(summ, predict_fn.input.dtype)
             out_sum = predict_fn(summ).numpy()
         else:
             out_sum = np.log(predict_fn(summ) + 1e-10)
@@ -134,13 +135,14 @@ def _calculate_pairwise_linearity(predict_fn: Callable, x: np.ndarray, input_sha
     Linearity score
 
     """
+
     ss = X_samples.shape[:2]  # X_samples shape=(nb_instances, nb_samples, nb_features)
     X_samples = X_samples.reshape((X_samples.shape[0] * X_samples.shape[1],) + input_shape)
 
     t_0 = time()
     if model_type == 'classifier':
         if isinstance(predict_fn, tf.keras.Model):
-            outs = predict_fn(X_samples).numpy()
+            outs = predict_fn(tf.dtypes.cast(X_samples, predict_fn.input.dtype)).numpy()
         else:
             outs = np.log(predict_fn(X_samples) + 1e-10)
         outs_shape = outs.shape[1:]
@@ -173,6 +175,7 @@ def _calculate_pairwise_linearity(predict_fn: Callable, x: np.ndarray, input_sha
     if model_type == 'classifier':
         # output of the linear superposition of inputs
         if isinstance(predict_fn, tf.keras.Model):
+            summ = tf.dtypes.cast(summ, predict_fn.input.dtype)
             out_sum = predict_fn(summ.reshape((summ.shape[0] * summ.shape[1],) + summ.shape[2:])).numpy()
         else:
             out_sum = np.log(predict_fn(summ.reshape((summ.shape[0] * summ.shape[1],) + summ.shape[2:])) + 1e-10)
