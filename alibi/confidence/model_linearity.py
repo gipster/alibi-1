@@ -87,7 +87,7 @@ def _calculate_global_linearity(predict_fn: Callable, input_shape: Tuple, X_samp
 
     if model_type == 'classifier':
         if isinstance(predict_fn, tf.keras.Model):
-            out_sum = predict_fn(summ)
+            out_sum = predict_fn(summ).numpy()
         else:
             out_sum = np.log(predict_fn(summ) + 1e-10)
         out_sum_shape = out_sum.shape[1:]
@@ -173,7 +173,7 @@ def _calculate_pairwise_linearity(predict_fn: Callable, x: np.ndarray, input_sha
     if model_type == 'classifier':
         # output of the linear superposition of inputs
         if isinstance(predict_fn, tf.keras.Model):
-            out_sum = predict_fn(summ.reshape((summ.shape[0] * summ.shape[1],) + summ.shape[2:]))
+            out_sum = predict_fn(summ.reshape((summ.shape[0] * summ.shape[1],) + summ.shape[2:])).numpy()
         else:
             out_sum = np.log(predict_fn(summ.reshape((summ.shape[0] * summ.shape[1],) + summ.shape[2:])) + 1e-10)
         out_sum_shape = out_sum.shape[1:]
