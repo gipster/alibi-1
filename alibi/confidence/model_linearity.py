@@ -86,7 +86,10 @@ def _calculate_global_linearity(predict_fn: Callable, input_shape: Tuple, X_samp
     summ = _linear_superposition(alphas, X_samples, input_shape)
 
     if model_type == 'classifier':
-        out_sum = np.log(predict_fn(summ) + 1e-10)
+        if isinstance(predict_fn, tf.keras.Model):
+            out_sum = predict_fn(summ)
+        else:
+            out_sum = np.log(predict_fn(summ) + 1e-10)
         out_sum_shape = out_sum.shape[1:]
     elif model_type == 'regressor':
         out_sum = predict_fn(summ)
@@ -169,7 +172,10 @@ def _calculate_pairwise_linearity(predict_fn: Callable, x: np.ndarray, input_sha
     summ = np.matmul(np.array([x_stack, X_samples]).T, alphas).T  # shape=(nb_instances,nb_samples,input_shape)
     if model_type == 'classifier':
         # output of the linear superposition of inputs
-        out_sum = np.log(predict_fn(summ.reshape((summ.shape[0] * summ.shape[1],) + summ.shape[2:])) + 1e-10)
+        if isinstance(predict_fn, tf.keras.Model):
+            out_sum = predict_fn(summ.reshape((summ.shape[0] * summ.shape[1],) + summ.shape[2:]))
+        else:
+            out_sum = np.log(predict_fn(summ.reshape((summ.shape[0] * summ.shape[1],) + summ.shape[2:])) + 1e-10)
         out_sum_shape = out_sum.shape[1:]
         out_sum = out_sum.reshape(ss + out_sum_shape)
     elif model_type == 'regressor':
