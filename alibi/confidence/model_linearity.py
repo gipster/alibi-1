@@ -59,7 +59,7 @@ def _calculate_global_linearity(predict_fn: Callable, input_shape: Tuple, X_samp
 
     t_0 = time()
     if model_type == 'classifier':
-        if isinstance(predict_fn, tf.keras.Model) or isinstance(predict_fn, 'keras.Model'):
+        if isinstance(predict_fn, tf.keras.Model):
             outs = np.log(predict_fn(X_samples).numpy() + 1e-10)
         else:
             outs = np.log(predict_fn(X_samples) + 1e-10)
