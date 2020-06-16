@@ -5,6 +5,7 @@ from numpy.linalg import norm
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 import string
+import tensorflow as tf
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,10 @@ def _calculate_global_linearity(predict_fn: Callable, input_shape: Tuple, X_samp
 
     t_0 = time()
     if model_type == 'classifier':
-        outs = np.log(predict_fn(X_samples) + 1e-10)
+        if isinstance(predict_fn, tf.keras.Model) or isinstance(predict_fn, 'keras.Model'):
+            outs = np.log(predict_fn(X_samples).numpy() + 1e-10)
+        else:
+            outs = np.log(predict_fn(X_samples) + 1e-10)
         outs_shape = outs.shape[1:]
         outs = outs.reshape(ss + outs_shape)  # shape=(nb_instances, nb_samples, nb_classes)
     elif model_type == 'regressor':
@@ -132,7 +136,10 @@ def _calculate_pairwise_linearity(predict_fn: Callable, x: np.ndarray, input_sha
 
     t_0 = time()
     if model_type == 'classifier':
-        outs = np.log(predict_fn(X_samples) + 1e-10)
+        if isinstance(predict_fn, tf.keras.Model) or isinstance(predict_fn, 'keras.Model'):
+            outs = np.log(predict_fn(X_samples).numpy() + 1e-10)
+        else:
+            outs = np.log(predict_fn(X_samples) + 1e-10)
         outs_shape = outs.shape[1:]
         x_out = np.log(predict_fn(x) + 1e-10)  # shape=(nb_instances, nb_classes)
         outs = outs.reshape(ss + outs_shape)  # shape=(nb_instances, nb_samples, nb_classes)
