@@ -59,10 +59,7 @@ def _calculate_global_linearity(predict_fn: Callable, input_shape: Tuple, X_samp
 
     t_0 = time()
     if model_type == 'classifier':
-        if isinstance(predict_fn, tf.keras.Model):
-            outs = predict_fn(tf.dtypes.cast(X_samples, predict_fn.input.dtype)).numpy()
-        else:
-            outs = np.log(predict_fn(X_samples) + 1e-10)
+        outs = np.log(predict_fn(X_samples) + 1e-10)
         outs_shape = outs.shape[1:]
         outs = outs.reshape(ss + outs_shape)  # shape=(nb_instances, nb_samples, nb_classes)
     elif model_type == 'regressor':
@@ -86,11 +83,7 @@ def _calculate_global_linearity(predict_fn: Callable, input_shape: Tuple, X_samp
     summ = _linear_superposition(alphas, X_samples, input_shape)
 
     if model_type == 'classifier':
-        if isinstance(predict_fn, tf.keras.Model):
-            summ = tf.dtypes.cast(summ, predict_fn.input.dtype)
-            out_sum = predict_fn(summ).numpy()
-        else:
-            out_sum = np.log(predict_fn(summ) + 1e-10)
+        out_sum = np.log(predict_fn(summ) + 1e-10)
         out_sum_shape = out_sum.shape[1:]
     elif model_type == 'regressor':
         out_sum = predict_fn(summ)
@@ -141,10 +134,7 @@ def _calculate_pairwise_linearity(predict_fn: Callable, x: np.ndarray, input_sha
 
     t_0 = time()
     if model_type == 'classifier':
-        if isinstance(predict_fn, tf.keras.Model):
-            outs = predict_fn(tf.dtypes.cast(X_samples, predict_fn.input.dtype)).numpy()
-        else:
-            outs = np.log(predict_fn(X_samples) + 1e-10)
+        outs = np.log(predict_fn(X_samples) + 1e-10)
         outs_shape = outs.shape[1:]
         x_out = np.log(predict_fn(x) + 1e-10)  # shape=(nb_instances, nb_classes)
         outs = outs.reshape(ss + outs_shape)  # shape=(nb_instances, nb_samples, nb_classes)
@@ -174,11 +164,7 @@ def _calculate_pairwise_linearity(predict_fn: Callable, x: np.ndarray, input_sha
     summ = np.matmul(np.array([x_stack, X_samples]).T, alphas).T  # shape=(nb_instances,nb_samples,input_shape)
     if model_type == 'classifier':
         # output of the linear superposition of inputs
-        if isinstance(predict_fn, tf.keras.Model):
-            summ = tf.dtypes.cast(summ, predict_fn.input.dtype)
-            out_sum = predict_fn(summ.reshape((summ.shape[0] * summ.shape[1],) + summ.shape[2:])).numpy()
-        else:
-            out_sum = np.log(predict_fn(summ.reshape((summ.shape[0] * summ.shape[1],) + summ.shape[2:])) + 1e-10)
+        out_sum = np.log(predict_fn(summ.reshape((summ.shape[0] * summ.shape[1],) + summ.shape[2:])) + 1e-10)
         out_sum_shape = out_sum.shape[1:]
         out_sum = out_sum.reshape(ss + out_sum_shape)
     elif model_type == 'regressor':
