@@ -42,44 +42,48 @@ def _compute_convergence_delta(model: Union[tf.keras.models.Model, 'keras.models
     -------
         Convergence deltas for each data point.
     """
+    if np.asarray([np.allclose(x, start_point[0]) for x in start_point]).all():
+        start_point = start_point[0]
+        if end_point.shape[0] != attributions.shape[0]:
+            raise ValueError("`attributions` and `end_point` must match on the first dimension "
+                             "but found `attributions`: {} and `end_point`: {}".format(attributions.shape[0],
+                                                                                       end_point.shape[0]))
 
-    if end_point.shape[0] != attributions.shape[0]:
-        raise ValueError("`attributions` and `end_point` must match on the first dimension "
-                         "but found `attributions`: {} and `end_point`: {}".format(attributions.shape[0],
-                                                                                   end_point.shape[0]))
+        start_point = tf.convert_to_tensor(start_point, dtype=model.input.dtype)
+        end_point = tf.convert_to_tensor(end_point, dtype=model.input.dtype)
 
-    start_point = tf.convert_to_tensor(start_point, dtype=model.input.dtype)
-    end_point = tf.convert_to_tensor(end_point, dtype=model.input.dtype)
+        def _sum_rows(inp):
 
-    def _sum_rows(inp):
+            input_str = string.ascii_lowercase[1: len(inp.shape)]
+            if isinstance(inp, tf.Tensor):
+                sums = tf.einsum('a{}->a'.format(input_str), inp).numpy()
+            elif isinstance(inp, np.ndarray):
+                sums = np.einsum('a{}->a'.format(input_str), inp)
+            else:
+                raise NotImplementedError('input must be a tensorflow tensor or a numpy array')
+            return sums
 
-        input_str = string.ascii_lowercase[1: len(inp.shape)]
-        if isinstance(inp, tf.Tensor):
-            sums = tf.einsum('a{}->a'.format(input_str), inp).numpy()
-        elif isinstance(inp, np.ndarray):
-            sums = np.einsum('a{}->a'.format(input_str), inp)
-        else:
-            raise NotImplementedError('input must be a tensorflow tensor or a numpy array')
-        return sums
+        start_out = _run_forward(model, start_point, target)
+        end_out = _run_forward(model, end_point, target)
+        if (len(model.output_shape) == 1 or model.output_shape[1] == 1) and target is not None:
+            target_tensor = tf.cast(target, dtype=start_out.dtype)
+            sign = 2 * target_tensor - 1
+            target_tensor = tf.reshape(1 - target_tensor, [len(target), 1])
 
-    start_out = _run_forward(model, start_point, target)
-    end_out = _run_forward(model, end_point, target)
-    if (len(model.output_shape) == 1 or model.output_shape[1] == 1) and target is not None:
-        target_tensor = tf.cast(target, dtype=start_out.dtype)
-        sign = 2 * target_tensor - 1
-        target_tensor = tf.reshape(1 - target_tensor, [len(target), 1])
+            start_out = target_tensor + sign * start_out
+            end_out = target_tensor + sign * end_out
 
-        start_out = target_tensor + sign * start_out
-        end_out = target_tensor + sign * end_out
+        start_out_sum = _sum_rows(start_out)
+        end_out_sum = _sum_rows(end_out)
 
-    start_out_sum = _sum_rows(start_out)
-    end_out_sum = _sum_rows(end_out)
+        attr_sum = _sum_rows(attributions)
 
-    attr_sum = _sum_rows(attributions)
+        _deltas = attr_sum - (end_out_sum - start_out_sum)
 
-    _deltas = attr_sum - (end_out_sum - start_out_sum)
-
-    return _deltas
+        return _deltas
+    else:
+        print('Convergence delta not computable')
+        return np.empty(end_point.shape)
 
 
 def _run_forward(model: Union[tf.keras.models.Model, 'keras.models.Model'],
@@ -245,8 +249,33 @@ def _sum_integral_terms(step_sizes: list,
     return sums
 
 
+def _sum_integral_terms_2(step_sizes: list,
+                          grads: Union[tf.Tensor, np.ndarray]) -> Union[tf.Tensor, np.ndarray]:
+    """
+    Sums the terms in the path integral with weights `step_sizes`.
+
+    Parameters
+    ----------
+    step_sizes
+        Weights in the path integral sum.
+    grads
+        Gradients to sum for each feature.
+
+    Returns
+    -------
+        Sums of the gradients along the chosen path.
+
+    """
+
+    sums = sum([step_sizes[i] * grads[i] for i in range(len(step_sizes))])
+
+    return sums
+
+
 def _format_input_baseline(X: np.ndarray,
-                           baselines: Union[None, int, float, np.ndarray]) -> np.ndarray:
+                           baselines: Union[None, int, float, np.ndarray],
+                           sigma: float,
+                           n_steps: int) -> np.ndarray:
     """
     Formats baselines to return a numpy array.
 
@@ -263,13 +292,25 @@ def _format_input_baseline(X: np.ndarray,
 
     """
     if baselines is None:
-        bls = np.zeros(X.shape).astype(X.dtype)
+        bls = np.asarray([np.zeros(X.shape).astype(X.dtype) for _ in range(n_steps)])
     elif isinstance(baselines, int) or isinstance(baselines, float):
-        bls = np.full(X.shape, baselines).astype(X.dtype)
+        bls = np.asarray([np.full(X.shape, baselines).astype(X.dtype) for _ in range(n_steps)])
     elif isinstance(baselines, np.ndarray):
-        bls = baselines.astype(X.dtype)
+        bls = np.asarray([baselines.astype(X.dtype) for _ in range(n_steps)])
+    elif baselines == 'gaussian':
+        bls = np.random.normal(X, scale=sigma)
+        bls = np.asarray([bls.astype(X.dtype) for _ in range(n_steps)])
+    elif baselines == 'uniform':
+        bls = np.random.random(X.shape)
+        bls = np.asarray([bls.astype(X.dtype) for _ in range(n_steps)])
+    elif baselines == 'average_gaussian':
+        bls = np.asarray([np.random.normal(X, scale=sigma).astype(X.dtype) for _ in range(n_steps)])
+    elif baselines == 'average_uniform':
+        bls = np.asarray([np.random.random(X.shape).astype(X.dtype) for _ in range(n_steps)])
     else:
-        raise ValueError('baselines must be `int`, `float`, `np.ndarray` or `None`. Found {}'.format(type(baselines)))
+        raise ValueError('baselines must be `int`, `float`, `np.ndarray`, `str` or `None`. '
+                         'Acceptable values for string are `gaussian`, `uniform`, `max_dist`, '
+                         '`average_gaussian` and `average_uniform`. Found {}'.format(type(baselines)))
 
     return bls
 
@@ -300,6 +341,31 @@ def _format_target(target: Union[None, int, list, np.ndarray],
             raise NotImplementedError
 
     return target
+
+
+def _format_path(X,
+                 baselines,
+                 target,
+                 nb_samples,
+                 sigma,
+                 method,
+                 n_steps,
+                 layer):
+    print('800A')
+    # format and check inputs and targets
+    baselines = _format_input_baseline(X, baselines, sigma, n_steps)
+    target = _format_target(target, nb_samples)
+
+    # defining integral method
+    step_sizes_func, alphas_func = approximation_parameters(method)
+    step_sizes, alphas = step_sizes_func(n_steps), alphas_func(n_steps)
+
+    if layer is not None:
+        step_sizes = [step_sizes[i] * (layer(X) - layer(baselines[i])).numpy() for i in range(n_steps)]
+    else:
+        step_sizes = [step_sizes[i] * (X - baselines[i]) for i in range(n_steps)]
+
+    return baselines, target, step_sizes, alphas
 
 
 class IntegratedGradients(Explainer):
@@ -353,7 +419,8 @@ class IntegratedGradients(Explainer):
 
     def explain(self,
                 X: np.ndarray,
-                baselines: Union[None, int, float, np.ndarray] = None,
+                baselines: Union[None, str, int, float, np.ndarray] = 'average_gaussian',
+                sigma: float = 0.1,
                 target: Union[None, int, list, np.ndarray] = None) -> Explanation:
         """Calculates the attributions for each input feature or element of layer and
         returns an Explanation object.
@@ -366,6 +433,8 @@ class IntegratedGradients(Explainer):
             Baselines (starting point of the path integral) for each instance.
             If the passed value is an `np.ndarray` must have the same shape as X.
             If not provided, all features values for the baselines are set to 0.
+        sigma
+            Standard deviation of the gaussian for baselines' Gaussian sampling.
         target
             Defines which element of the model output is considered to compute the gradients.
             It can be a list of integers or a numeric value. If a numeric value is passed, the gradients are calculated
@@ -396,15 +465,24 @@ class IntegratedGradients(Explainer):
         nb_samples = len(X)
 
         # format and check inputs and targets
-        baselines = _format_input_baseline(X, baselines)
-        target = _format_target(target, nb_samples)
+        #baselines = _format_input_baseline(X, baselines)
+        #target = _format_target(target, nb_samples)
 
         # defining integral method
-        step_sizes_func, alphas_func = approximation_parameters(self.method)
-        step_sizes, alphas = step_sizes_func(self.n_steps), alphas_func(self.n_steps)
+        #step_sizes_func, alphas_func = approximation_parameters(self.method)
+        #step_sizes, alphas = step_sizes_func(self.n_steps), alphas_func(self.n_steps)
+
+        baselines, target, step_sizes, alphas = _format_path(X,
+                                                             baselines,
+                                                             target,
+                                                             nb_samples,
+                                                             sigma,
+                                                             self.method,
+                                                             self.n_steps,
+                                                             self.layer)
 
         # construct paths and prepare batches
-        paths = np.concatenate([baselines + alphas[i] * (X - baselines) for i in range(self.n_steps)], axis=0)
+        paths = np.concatenate([baselines[i] + alphas[i] * (X - baselines[i]) for i in range(self.n_steps)], axis=0)
         if target is not None:
             target_paths = np.concatenate([target for _ in range(self.n_steps)], axis=0)
             paths_ds = tf.data.Dataset.from_tensor_slices((paths, target_paths)).batch(self.internal_batch_size)
@@ -448,12 +526,15 @@ class IntegratedGradients(Explainer):
         grads = tf.reshape(grads, (self.n_steps, nb_samples) + shape)
 
         # sum integral terms and scale attributions
-        sum_int = _sum_integral_terms(step_sizes, grads.numpy())
-        if self.layer is not None:
-            norm = (self.layer(X) - self.layer(baselines)).numpy()
-        else:
-            norm = X - baselines
-        attributions = norm * sum_int
+        sum_int = _sum_integral_terms_2(step_sizes, grads.numpy())
+
+        #if self.layer is not None:
+        #    norm = (self.layer(X) - self.layer(baselines)).numpy()
+        #else:
+        #    norm = X - baselines
+        #attributions = norm * sum_int
+
+        attributions = sum_int
 
         return self.build_explanation(
             X=X,
