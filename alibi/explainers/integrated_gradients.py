@@ -5,7 +5,7 @@ import string
 import tensorflow as tf
 
 from alibi.api.defaults import DEFAULT_DATA_INTGRAD, DEFAULT_META_INTGRAD
-from alibi.utils.approximation_methods import approximation_parameters
+from alibi.utils.approximation_methods import approximation_parameters, SUPPORTED_METHODS
 from alibi.api.interfaces import Explainer, Explanation
 
 from typing import Callable, TYPE_CHECKING, Union
@@ -310,7 +310,7 @@ def _format_input_baseline(X: np.ndarray,
     else:
         raise ValueError('baselines must be `int`, `float`, `np.ndarray`, `str` or `None`. '
                          'Acceptable values for string are `gaussian`, `uniform`, `max_dist`, '
-                         '`average_gaussian` and `average_uniform`. Found {}'.format(type(baselines)))
+                         '`average_gaussian` and `average_uniform`. Found baselines type {}'.format(type(baselines)))
 
     return bls
 
@@ -357,8 +357,14 @@ def _format_path(X,
     target = _format_target(target, nb_samples)
 
     # defining integral method
-    step_sizes_func, alphas_func = approximation_parameters(method)
-    step_sizes, alphas = step_sizes_func(n_steps), alphas_func(n_steps)
+    print(SUPPORTED_METHODS)
+
+    if method in SUPPORTED_METHODS:
+        step_sizes_func, alphas_func = approximation_parameters(method)
+        step_sizes, alphas = step_sizes_func(n_steps), alphas_func(n_steps)
+    elif method == 'average_uniform' or method == 'uniform' or method is None:
+        step_sizes = [1 for _ in range(n_steps)]
+        alphas = np.random.random(n_steps)
 
     if layer is not None:
         step_sizes = [step_sizes[i] * (layer(X) - layer(baselines[i])).numpy() for i in range(n_steps)]
@@ -464,22 +470,8 @@ class IntegratedGradients(Explainer):
 
         nb_samples = len(X)
 
-        # format and check inputs and targets
-        #baselines = _format_input_baseline(X, baselines)
-        #target = _format_target(target, nb_samples)
-
-        # defining integral method
-        #step_sizes_func, alphas_func = approximation_parameters(self.method)
-        #step_sizes, alphas = step_sizes_func(self.n_steps), alphas_func(self.n_steps)
-
-        baselines, target, step_sizes, alphas = _format_path(X,
-                                                             baselines,
-                                                             target,
-                                                             nb_samples,
-                                                             sigma,
-                                                             self.method,
-                                                             self.n_steps,
-                                                             self.layer)
+        baselines, target, step_sizes, alphas = _format_path(X, baselines, target, nb_samples, sigma,
+                                                             self.method, self.n_steps, self.layer)
 
         # construct paths and prepare batches
         paths = np.concatenate([baselines[i] + alphas[i] * (X - baselines[i]) for i in range(self.n_steps)], axis=0)
@@ -526,15 +518,7 @@ class IntegratedGradients(Explainer):
         grads = tf.reshape(grads, (self.n_steps, nb_samples) + shape)
 
         # sum integral terms and scale attributions
-        sum_int = _sum_integral_terms_2(step_sizes, grads.numpy())
-
-        #if self.layer is not None:
-        #    norm = (self.layer(X) - self.layer(baselines)).numpy()
-        #else:
-        #    norm = X - baselines
-        #attributions = norm * sum_int
-
-        attributions = sum_int
+        attributions = _sum_integral_terms_2(step_sizes, grads.numpy())
 
         return self.build_explanation(
             X=X,
