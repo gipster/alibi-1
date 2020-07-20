@@ -365,6 +365,8 @@ def _format_path(X,
     elif method == 'average_uniform' or method == 'uniform' or method is None:
         step_sizes = [1 for _ in range(n_steps)]
         alphas = np.random.random(n_steps)
+    else:
+        raise ValueError("method {} not understood".format(method))
 
     if layer is not None:
         step_sizes = [step_sizes[i] * (layer(X) - layer(baselines[i])).numpy() for i in range(n_steps)]
