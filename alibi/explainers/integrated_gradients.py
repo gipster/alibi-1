@@ -345,7 +345,7 @@ class IntegratedGradients(Explainer):
         self.meta['params'].update(params)
 
         self.model = model
-        self.input_dtype = self.model.input.dtype
+        self.input_dtype = self.model.layers[0].dtype
         self.layer = layer
         self.n_steps = n_steps
         self.method = method
